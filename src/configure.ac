@@ -157,9 +157,9 @@ AC_ARG_WITH([iconsdir],
 # initial PGLD_flags
 # pkg-config module check, generates $1_LIBS and $1_CFLAGS vars
 PKG_CHECK_MODULES([libnetfilterqueue],[libnetfilter_queue])
-PGLD_CFLAGS=""
+PGLD_CFLAGS="-fcommon"
 PGLD_CPPFLAGS="$libnetfilterqueue_CFLAGS -DVERSION=\\\"$VERSION\\\" -DPACKAGE_NAME=\\\"$PACKAGE\\\""
-PGLD_LDFLAGS=""
+PGLD_LDFLAGS="-Wl,--allow-multiple-definition"
 PGLD_LIBS="$libnetfilterqueue_LIBS"
 
 # configure-switch for zlib
