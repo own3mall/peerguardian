@@ -6,6 +6,7 @@ AC_INIT([pgl], [2.3.1+git], [http://sourceforge.net/p/peerguardian/bugs/])
 AC_CONFIG_SRCDIR([pgld/src/pgld.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_AUX_DIR([.])
 AM_PROG_AR
 AM_INIT_AUTOMAKE([-Wall])
 LT_INIT([disable-static])
