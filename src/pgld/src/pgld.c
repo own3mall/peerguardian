@@ -23,6 +23,8 @@
 
 
 #include "pgld.h"
+#include <libnfnetlink/libnfnetlink.h>
+#include <libnetfilter_queue/libnetfilter_queue.h>
 
 static unsigned int accept_mark = 0, reject_mark = 0, use_syslog = 0, queue_length = 0, opt_merge = 0, blockfile_count = 0;
 static unsigned short queue_num = 0;
@@ -486,6 +488,9 @@ static int nfqueue_bind() {
         return -1;
     }
 
+    /* Set Netlink receive buffer to 16MB */
+    nfnl_rcvbufsiz(nfq_nfnlh(nfqueue_h), 16777216);
+
     if (nfq_unbind_pf(nfqueue_h, AF_INET) < 0) {
         do_log(LOG_ERR, "ERROR: Error during nfq_unbind_pf(): %s", strerror(errno));
         nfq_close(nfqueue_h);
@@ -512,7 +517,11 @@ static int nfqueue_bind() {
         return -1;
     }
 
-    if (nfq_set_mode(nfqueue_qh, NFQNL_COPY_PACKET, PAYLOADSIZE) < 0) {
+    /* * Switch back to COPY_PACKET but with a small range (80 bytes).
+     * This is enough for IP + TCP/UDP headers so logging works, 
+     * but small enough to avoid ENOBUFS.
+     */
+    if (nfq_set_mode(nfqueue_qh, NFQNL_COPY_PACKET, 80) < 0) {
         do_log(LOG_ERR, "ERROR: Can't set packet_copy mode: %s", strerror(errno));
         nfq_destroy_queue(nfqueue_qh);
         nfq_close(nfqueue_h);
