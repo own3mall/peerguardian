@@ -1036,7 +1036,7 @@ insert_iptables () {
         # Set constant variables for iptables commands
         case "$IPTABLES_TARGET" in
         NFQUEUE)
-            IPTABLES_TARGET_BLOCK="$IPTABLES_TARGET --queue-num $NFQUEUE_NUMBER"
+            IPTABLES_TARGET_BLOCK="$IPTABLES_TARGET --queue-num $NFQUEUE_NUMBER --queue-bypass"
             ;;
         QUEUE)
             IPTABLES_TARGET_BLOCK="$IPTABLES_TARGET"

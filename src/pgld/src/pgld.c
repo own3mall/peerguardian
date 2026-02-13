@@ -511,6 +511,15 @@ static int nfqueue_bind() {
         do_log(LOG_INFO, "INFO: REJECT mark: %u", reject_mark);
     }
     nfqueue_qh = nfq_create_queue(nfqueue_h, queue_num, &nfqueue_cb, NULL);
+    
+    /* In nfqueue_bind() function */
+    uint32_t flags = NFQA_CFG_F_FAIL_OPEN;
+    if (nfq_set_queue_flags(nfqueue_qh, flags, flags) < 0) {
+        do_log(LOG_ERR, "ERROR: Could not set FAIL_OPEN flag. Packets will drop on overflow.");
+    } else {
+        do_log(LOG_INFO, "INFO: FAIL_OPEN (bypass) enabled. Connection won't drop if buffer fills.");
+    }
+    
     if (!nfqueue_qh) {
         do_log(LOG_ERR, "ERROR: Error during nfq_create_queue(): %s", strerror(errno));
         nfq_close(nfqueue_h);
@@ -543,7 +552,6 @@ static void nfqueue_loop () {
     struct nfnl_handle *nh;
     int fd, rv;
     char buf[RECVBUFFSIZE];
-//  struct pollfd fds[1];
 
     if (nfqueue_bind() < 0) {
         do_log(LOG_ERR, "ERROR: Error binding to queue: %hu", queue_num);
@@ -553,21 +561,41 @@ static void nfqueue_loop () {
     nh = nfq_nfnlh(nfqueue_h);
     fd = nfnl_fd(nh);
 
-    while ((rv = recv(fd, buf, sizeof(buf), 0)) >= 0) {
-        nfq_handle_packet(nfqueue_h, buf, rv);
-    }
-    int err=errno;
-    if ( err == ENOBUFS ) {
-        do_log(LOG_ERR, "ERROR: ENOBUFS error on queue '%hu'. Use pgld -Q option or set in pglcmd.conf NFQUEUE_MAXLEN to increase buffers, recv returned %s", queue_num, strerror(err));
-        /* close and return, nfq_destroy_queue() won't work as we've no buffers */
-        nfq_close(nfqueue_h);
-        exit(1);
-    } else {
-        do_log(LOG_ERR, "ERROR: Error on queue '%hu', recv returned %s", queue_num, strerror(err));
-        nfqueue_unbind();
-        exit(0);
+    /* Main loop */
+    while (1) {
+        rv = recv(fd, buf, sizeof(buf), 0);
+
+        if (rv >= 0) {
+            nfq_handle_packet(nfqueue_h, buf, rv);
+            continue;
+        }
+
+        /* If we are here, rv is negative (an error occurred) */
+        int err = errno;
+
+        if (err == ENOBUFS) {
+            /* * ALERT: This is where the overflow happens.
+             * Instead of exiting, we log the event and continue.
+             * The --queue-bypass in iptables handles the 'fail-open' 
+             * while the kernel clears the buffer.
+             */
+            do_log(LOG_WARNING, "CRITICAL: ENOBUFS (Buffer Overflow) on queue %hu! Packets are bypassing pgl until catch-up.", queue_num);
+            
+            /* Give the CPU a tiny moment to breathe if it's a storm */
+            usleep(1000); 
+            continue; 
+        } else if (err == EINTR) {
+            continue; /* Interrupted system call, just ignore */
+        } else {
+            /* For any other hard error, we must exit */
+            do_log(LOG_ERR, "ERROR: Fatal error on queue '%hu': %s", queue_num, strerror(err));
+            nfqueue_unbind();
+            exit(1);
+        }
     }
 }
+
+
 
 static void print_usage() {
     fprintf(stderr, PACKAGE_NAME " " VERSION "\n\n");
