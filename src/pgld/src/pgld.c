@@ -488,8 +488,10 @@ static int nfqueue_bind() {
         return -1;
     }
 
-    /* Set Netlink receive buffer to 16MB */
+#ifndef LOWMEM
+	/* Set Netlink receive buffer to 16MB in NON-LOWMEM MODE Only */
     nfnl_rcvbufsiz(nfq_nfnlh(nfqueue_h), 16777216);
+#endif
 
     if (nfq_unbind_pf(nfqueue_h, AF_INET) < 0) {
         do_log(LOG_ERR, "ERROR: Error during nfq_unbind_pf(): %s", strerror(errno));
